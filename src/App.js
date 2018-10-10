@@ -13,6 +13,7 @@ class App extends Component {
   constructor() {
     super();
     this.state = {
+      roomId: null,
       messages: [],
       joinableRooms: [],
       joinedRooms: []
@@ -31,18 +32,26 @@ class App extends Component {
 
     chatManager.connect().then(currentUser => {
       this.currentUser = currentUser;
+      this.getRooms();
+    });
+  }
 
-      this.currentUser
-        .getJoinableRooms()
-        .then(joinableRooms => {
-          this.setState({
-            joinableRooms,
-            joinedRooms: this.currentUser.rooms
-          });
-        })
-        .catch(err => console.log(`Error on joined Rooms ` + err));
-      this.currentUser.subscribeToRoom({
-        roomId: 18215009,
+  getRooms = () => {
+    this.currentUser
+      .getJoinableRooms()
+      .then(joinableRooms => {
+        this.setState({
+          joinableRooms,
+          joinedRooms: this.currentUser.rooms
+        });
+      })
+      .catch(err => console.log(`Error on joined Rooms ` + err));
+  };
+  subscribeToRoom = roomId => {
+    this.setState({ messages: [] });
+    this.currentUser
+      .subscribeToRoom({
+        roomId,
         hooks: {
           onNewMessage: message => {
             this.setState({
@@ -50,24 +59,47 @@ class App extends Component {
             });
           }
         }
-      });
-    });
-  }
+      })
+      .then(room => {
+        this.setState({ roomId: room.id });
+        this.getRooms();
+      })
+      .catch(err => `error on Subscribe to room ` + err);
+  };
+
   sendMessage = text => {
     this.currentUser.sendMessage({
       text,
-      roomId: 18215009
+      roomId: this.state.roomId
     });
   };
+
+  createRoom = roomName => {
+    this.currentUser
+      .createRoom({
+        name: roomName
+      })
+      .then(room => this.subscribeToRoom(room.id))
+      .catch(err => console.log(`error with createroom : ${err}`));
+  };
+
   render() {
     return (
       <div className="app">
         <RoomList
-          rooms={[...this.state.joinedRooms, this.state.joinableRooms]}
+          roomId={this.state.roomId}
+          subscribeToRoom={this.subscribeToRoom}
+          rooms={[...this.state.joinedRooms, ...this.state.joinableRooms]}
         />
-        <MessageList messages={this.state.messages} />
-        <SendMessagesForm sendMessage={this.sendMessage} />
-        <NewRoomForm />
+        <MessageList
+          roomId={this.state.roomId}
+          messages={this.state.messages}
+        />
+        <SendMessagesForm
+          disabled={!this.state.roomId}
+          sendMessage={this.sendMessage}
+        />
+        <NewRoomForm createRoom={this.createRoom} />
       </div>
     );
   }
